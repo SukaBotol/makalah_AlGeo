@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-def audio_to_feet(audio, sr, minMs=200, thresholdPercent=60):       #Cuts the audio into single footsteps
+def audio_to_feet(audio, sr, minMs=200, thresholdPercent=60):
     frameLength = 2048
     hopLength = 512
     

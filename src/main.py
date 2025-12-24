@@ -4,8 +4,6 @@ import joblib
 from pathlib import Path
 from scipy.signal import find_peaks
 
-# Import functions from prepare_dataset.py
-# (or you can copy-paste them here)
 def detect_footsteps(audio, sr, min_distance_ms=200, threshold_percentile=60):
     frame_length = 2048
     hop_length = 512
@@ -26,10 +24,7 @@ def extract_mfcc_features(audio, sr, n_mfcc=20):
     features = np.concatenate([mfcc_mean, mfcc_std])
     return features
 
-
-# ============================================================
-# STEP 1: Load trained models
-# ============================================================
+# load models
 print("Loading trained models...")
 scaler = joblib.load("scaler.joblib")
 pca = joblib.load("pca.joblib")
@@ -37,10 +32,6 @@ agent_classifier = joblib.load("agent_model.joblib")
 material_classifier = joblib.load("material_model.joblib")
 print("Models loaded!")
 
-
-# ============================================================
-# STEP 2: Process new audio file
-# ============================================================
 def predict_footstep_labels(audio_filepath, sr=48000):
     """
     Input: path to WAV file
@@ -49,18 +40,17 @@ def predict_footstep_labels(audio_filepath, sr=48000):
     
     print(f"\nProcessing: {audio_filepath}")
     
-    # Load audio
+    # load audio
     y, sr_loaded = librosa.load(audio_filepath, sr=sr, mono=True)
     
-    # Detect footsteps
+    # detect footsteps
     peaks = detect_footsteps(y, sr)
     print(f"Detected {len(peaks)} footsteps")
     
     if len(peaks) == 0:
         print("No footsteps detected!")
         return None
-    
-    # Extract features for each footstep
+
     window_samples = int(0.35 * sr)
     offset_samples = int(0.10 * sr)
     
@@ -74,39 +64,24 @@ def predict_footstep_labels(audio_filepath, sr=48000):
         features = extract_mfcc_features(footstep_audio, sr, n_mfcc=20)
         all_features.append(features)
     
-    all_features = np.array(all_features)  # Shape: (num_footsteps, 40)
+    all_features = np.array(all_features) 
+
+    X_scaled = scaler.transform(all_features) 
+    X_pca = pca.transform(X_scaled)            
     
-    # ========================================================
-    # STEP 3: Transform through pipeline (normalize → PCA)
-    # ========================================================
-    X_scaled = scaler.transform(all_features)  # Shape: (num_footsteps, 40)
-    X_pca = pca.transform(X_scaled)            # Shape: (num_footsteps, 20)
-    
-    # ========================================================
-    # STEP 4: Predict for each footstep
-    # ========================================================
     agent_predictions = agent_classifier.predict(X_pca)
     material_predictions = material_classifier.predict(X_pca)
-    
-    # Get prediction probabilities (for confidence)
+
     agent_decision = agent_classifier.decision_function(X_pca)
     material_decision = material_classifier.decision_function(X_pca)
-    
-    # ========================================================
-    # STEP 5: Majority voting
-    # ========================================================
-    """
-    Final prediction = most common label across all footsteps
-    Confidence = proportion of votes for winner
-    """
-    
-    # Agent voting
+
+    # agent voting
     agent_unique, agent_counts = np.unique(agent_predictions, return_counts=True)
     agent_winner_idx = np.argmax(agent_counts)
     agent_final = agent_unique[agent_winner_idx]
     agent_confidence = agent_counts[agent_winner_idx] / len(agent_predictions)
     
-    # Material voting
+    # material voting
     material_unique, material_counts = np.unique(material_predictions, return_counts=True)
     material_winner_idx = np.argmax(material_counts)
     material_final = material_unique[material_winner_idx]
@@ -115,9 +90,6 @@ def predict_footstep_labels(audio_filepath, sr=48000):
     return agent_final, agent_confidence, material_final, material_confidence
 
 
-# ============================================================
-# STEP 6: Run prediction on a test file
-# ============================================================
 if __name__ == "__main__":
     import sys
     
